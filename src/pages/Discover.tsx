@@ -1,76 +1,40 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Navigation } from "@/components/Navigation";
 import { SearchFilters } from "@/components/SearchFilters";
 import { ArtCard } from "@/components/ArtCard";
 import { Heart } from "lucide-react";
-import warliImage from "@/assets/art-warli.jpg";
-import kathakaliImage from "@/assets/art-kathakali.jpg";
-import miniatureImage from "@/assets/art-miniature.jpg";
-
-// Mock data - will be replaced with Supabase data
-const mockArtForms = [
-  {
-    id: "1",
-    title: "Warli Folk Art",
-    description: "Traditional tribal art from Maharashtra featuring simple figures, animals, and nature motifs painted in white on mud walls",
-    origin: "Maharashtra",
-    type: "Painting", 
-    imageUrl1: warliImage,
-    likes: 124
-  },
-  {
-    id: "2",
-    title: "Kathakali",
-    description: "Classical dance-drama from Kerala with elaborate costumes, intricate face painting, and expressive storytelling",
-    origin: "Kerala",
-    type: "Dance",
-    imageUrl1: kathakaliImage,
-    likes: 89
-  },
-  {
-    id: "3", 
-    title: "Rajasthani Miniature Painting",
-    description: "Intricate paintings depicting royal court life, mythology, and nature with fine brushwork and vibrant colors",
-    origin: "Rajasthan",
-    type: "Painting",
-    imageUrl1: miniatureImage,
-    likes: 156
-  },
-  {
-    id: "4",
-    title: "Madhubani Painting", 
-    description: "Traditional folk art from Bihar featuring geometric patterns, nature motifs, and mythological themes",
-    origin: "Bihar",
-    type: "Painting",
-    imageUrl1: warliImage, // Placeholder
-    likes: 203
-  },
-  {
-    id: "5",
-    title: "Bharatanatyam",
-    description: "Classical dance form from Tamil Nadu known for its precise movements, expressions, and spiritual themes",
-    origin: "Tamil Nadu", 
-    type: "Dance",
-    imageUrl1: kathakaliImage, // Placeholder
-    likes: 178
-  },
-  {
-    id: "6",
-    title: "Kalamkari",
-    description: "Ancient textile art involving hand-painting or block-printing on cotton fabric with natural dyes",
-    origin: "Andhra Pradesh",
-    type: "Textile", 
-    imageUrl1: miniatureImage, // Placeholder
-    likes: 92
-  }
-];
+import { supabase } from "@/integrations/supabase/client";
+import { ArtForm } from "@/types/artForm";
 
 const Discover = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("All Types");
   const [selectedOrigin, setSelectedOrigin] = useState("All Regions");
-  const [artForms, setArtForms] = useState(mockArtForms);
+  const [artForms, setArtForms] = useState<ArtForm[]>([]);
   const [likedArtForms, setLikedArtForms] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchArtForms();
+  }, []);
+
+  const fetchArtForms = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('art_forms')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setArtForms(data || []);
+    } catch (error) {
+      console.error('Error fetching art forms:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter art forms based on search and filters
   const filteredArtForms = artForms.filter((artForm) => {
@@ -82,27 +46,36 @@ const Discover = () => {
     return matchesSearch && matchesType && matchesOrigin;
   });
 
-  const handleLike = (artFormId: string) => {
+  const handleLike = async (artFormId: string) => {
     const newLikedArtForms = new Set(likedArtForms);
     const isCurrentlyLiked = likedArtForms.has(artFormId);
+    const artForm = artForms.find(af => af.id === artFormId);
 
-    if (isCurrentlyLiked) {
-      newLikedArtForms.delete(artFormId);
-    } else {
-      newLikedArtForms.add(artFormId);
+    if (!artForm) return;
+
+    try {
+      const newLikes = isCurrentlyLiked ? artForm.likes - 1 : artForm.likes + 1;
+      
+      const { error } = await supabase
+        .from('art_forms')
+        .update({ likes: newLikes })
+        .eq('id', artFormId);
+
+      if (error) throw error;
+
+      if (isCurrentlyLiked) {
+        newLikedArtForms.delete(artFormId);
+      } else {
+        newLikedArtForms.add(artFormId);
+      }
+
+      setLikedArtForms(newLikedArtForms);
+      setArtForms(prev => prev.map(af => 
+        af.id === artFormId ? { ...af, likes: newLikes } : af
+      ));
+    } catch (error) {
+      console.error('Error updating likes:', error);
     }
-
-    setLikedArtForms(newLikedArtForms);
-
-    // Update likes count
-    setArtForms(prev => prev.map(artForm => 
-      artForm.id === artFormId 
-        ? { ...artForm, likes: artForm.likes + (isCurrentlyLiked ? -1 : 1) }
-        : artForm
-    ));
-
-    // TODO: Update likes in Supabase
-    console.log(`${isCurrentlyLiked ? 'Unliked' : 'Liked'} art form:`, artFormId);
   };
 
   const handleClearFilters = () => {
@@ -111,9 +84,8 @@ const Discover = () => {
     setSelectedOrigin("All Regions");
   };
 
-  const handleArtFormClick = (artForm: any) => {
-    // TODO: Navigate to art form detail page
-    console.log("Clicked art form:", artForm.title);
+  const handleArtFormClick = (artForm: ArtForm) => {
+    navigate(`/art/${artForm.id}`);
   };
 
   return (
@@ -152,7 +124,17 @@ const Discover = () => {
         </div>
 
         {/* Art Forms Grid */}
-        {filteredArtForms.length > 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="bg-muted h-48 rounded-lg mb-4"></div>
+                <div className="bg-muted h-4 rounded mb-2"></div>
+                <div className="bg-muted h-3 rounded w-3/4"></div>
+              </div>
+            ))}
+          </div>
+        ) : filteredArtForms.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredArtForms.map((artForm) => (
               <ArtCard

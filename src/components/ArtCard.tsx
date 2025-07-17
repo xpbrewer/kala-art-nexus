@@ -2,18 +2,7 @@ import { Heart, MapPin, Palette } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-interface ArtForm {
-  id: string;
-  title: string;
-  description: string;
-  origin: string;
-  type: string;
-  imageUrl1: string;
-  imageUrl2?: string;
-  imageUrl3?: string;
-  likes: number;
-}
+import { ArtForm } from "@/types/artForm";
 
 interface ArtCardProps {
   artForm: ArtForm;
@@ -35,7 +24,7 @@ export const ArtCard = ({ artForm, onLike, onClick, isLiked = false }: ArtCardPr
     >
       <div className="relative">
         <img
-          src={artForm.imageUrl1}
+          src={artForm.image_url_1}
           alt={artForm.title}
           className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
         />

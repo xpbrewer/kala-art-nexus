@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   BarChart3, 
   Heart, 
@@ -16,39 +17,67 @@ import {
   LogIn
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { ArtForm } from "@/types/artForm";
 
 const Admin = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [stats, setStats] = useState({
+    totalArtForms: 0,
+    totalLikes: 0,
+    artByType: {} as Record<string, number>,
+    artByOrigin: {} as Record<string, number>
+  });
   const { toast } = useToast();
 
-  // Mock admin credentials
+  // Admin credentials
   const adminCredentials = {
     username: "admin",
     password: "kala123"
   };
 
-  // Mock statistics
-  const stats = {
-    totalArtForms: 25,
-    totalLikes: 1247,
-    artByType: {
-      Painting: 12,
-      Dance: 6,
-      Textile: 4,
-      Sculpture: 2,
-      Music: 1
-    },
-    artByOrigin: {
-      Kerala: 5,
-      Rajasthan: 4,
-      Maharashtra: 3,
-      "Tamil Nadu": 3,
-      "West Bengal": 2,
-      Gujarat: 2,
-      Others: 6
+  // Available options for dropdowns
+  const artTypes = ["Painting", "Dance", "Textile", "Sculpture", "Music", "Craft"];
+  const artOrigins = [
+    "Andhra Pradesh", "Assam", "Bihar", "Gujarat", "Haryana", "Himachal Pradesh",
+    "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Odisha", "Punjab",
+    "Rajasthan", "Tamil Nadu", "Telangana", "Uttar Pradesh", "Uttarakhand",
+    "West Bengal"
+  ];
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchStats();
+    }
+  }, [isLoggedIn]);
+
+  const fetchStats = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('art_forms')
+        .select('*');
+
+      if (error) throw error;
+
+      const totalArtForms = data?.length || 0;
+      const totalLikes = data?.reduce((sum, item) => sum + item.likes, 0) || 0;
+      
+      const artByType = data?.reduce((acc, item) => {
+        acc[item.type] = (acc[item.type] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
+
+      const artByOrigin = data?.reduce((acc, item) => {
+        acc[item.origin] = (acc[item.origin] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
+
+      setStats({ totalArtForms, totalLikes, artByType, artByOrigin });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
     }
   };
 
@@ -70,14 +99,40 @@ const Admin = () => {
     }
   };
 
-  const handleAddArtForm = (e: React.FormEvent) => {
+  const handleAddArtForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Add to Supabase
-    toast({
-      title: "Art Form Added",
-      description: "New art form has been successfully added!",
-    });
-    setShowAddForm(false);
+    const formData = new FormData(e.target as HTMLFormElement);
+    
+    try {
+      const { error } = await supabase
+        .from('art_forms')
+        .insert({
+          title: formData.get('title') as string,
+          description: formData.get('description') as string,
+          origin: formData.get('origin') as string,
+          type: formData.get('type') as string,
+          image_url_1: formData.get('image_url_1') as string,
+          image_url_2: formData.get('image_url_2') as string || undefined,
+          image_url_3: formData.get('image_url_3') as string || undefined,
+          likes: 0
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Art Form Added",
+        description: "New art form has been successfully added!",
+      });
+      setShowAddForm(false);
+      fetchStats(); // Refresh stats
+    } catch (error) {
+      console.error('Error adding art form:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add art form. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (!isLoggedIn) {
@@ -232,37 +287,60 @@ const Admin = () => {
               <form onSubmit={handleAddArtForm} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="title">Title *</Label>
-                  <Input id="title" placeholder="Art form title" required />
+                  <Input name="title" id="title" placeholder="Art form title" required />
                 </div>
                 
                 <div>
                   <Label htmlFor="origin">Origin *</Label>
-                  <Input id="origin" placeholder="e.g., Kerala" required />
+                  <Select name="origin" required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select origin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {artOrigins.map((origin) => (
+                        <SelectItem key={origin} value={origin}>
+                          {origin}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <div>
                   <Label htmlFor="type">Type *</Label>
-                  <Input id="type" placeholder="e.g., Painting, Dance" required />
+                  <Select name="type" required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {artTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <div>
-                  <Label htmlFor="imageUrl1">Image URL 1 *</Label>
-                  <Input id="imageUrl1" type="url" placeholder="Primary image URL" required />
+                  <Label htmlFor="image_url_1">Image URL 1 *</Label>
+                  <Input name="image_url_1" id="image_url_1" type="url" placeholder="Primary image URL" required />
                 </div>
                 
                 <div>
-                  <Label htmlFor="imageUrl2">Image URL 2</Label>
-                  <Input id="imageUrl2" type="url" placeholder="Optional second image" />
+                  <Label htmlFor="image_url_2">Image URL 2</Label>
+                  <Input name="image_url_2" id="image_url_2" type="url" placeholder="Optional second image" />
                 </div>
                 
                 <div>
-                  <Label htmlFor="imageUrl3">Image URL 3</Label>
-                  <Input id="imageUrl3" type="url" placeholder="Optional third image" />
+                  <Label htmlFor="image_url_3">Image URL 3</Label>
+                  <Input name="image_url_3" id="image_url_3" type="url" placeholder="Optional third image" />
                 </div>
                 
                 <div className="md:col-span-2">
                   <Label htmlFor="description">Description *</Label>
                   <Textarea 
+                    name="description"
                     id="description" 
                     placeholder="Detailed description of the art form"
                     className="min-h-[100px]"

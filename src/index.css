@@ -9,10 +9,10 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /* Indian Art Theme - Kalakritiyan */
-    --background: 46 30% 97%; /* Off-white/Sand */
+    --background: 43 24% 93%; /* Soft textured beige */
     --foreground: 0 50% 25%; /* Deep Maroon */
 
-    --card: 0 0% 100%;
+    --card: 0 0% 93%; /* Light grey for cards */
     --card-foreground: 0 50% 25%;
 
     --popover: 0 0% 100%;

@@ -9,43 +9,56 @@ import warliImage from "@/assets/art-warli.jpg";
 import kathakaliImage from "@/assets/art-kathakali.jpg";
 import miniatureImage from "@/assets/art-miniature.jpg";
 
-// Mock data - will be replaced with Supabase data
-const featuredArtForms = [
-  {
-    id: "1",
-    title: "Warli Folk Art",
-    description: "Traditional tribal art from Maharashtra featuring simple figures and nature motifs",
-    origin: "Maharashtra", 
-    type: "Painting",
-    imageUrl1: warliImage,
-    likes: 124
-  },
-  {
-    id: "2", 
-    title: "Kathakali",
-    description: "Classical dance-drama from Kerala with elaborate costumes and face painting",
-    origin: "Kerala",
-    type: "Dance", 
-    imageUrl1: kathakaliImage,
-    likes: 89
-  },
-  {
-    id: "3",
-    title: "Rajasthani Miniature",
-    description: "Intricate paintings depicting royal court life and mythology",
-    origin: "Rajasthan",
-    type: "Painting",
-    imageUrl1: miniatureImage, 
-    likes: 156
-  }
-];
+import { supabase } from "@/integrations/supabase/client";
+import { ArtForm } from "@/types/artForm";
 
 const Index = () => {
   const [mounted, setMounted] = useState(false);
+  const [featuredArtForms, setFeaturedArtForms] = useState<ArtForm[]>([]);
 
   useEffect(() => {
     setMounted(true);
+    fetchFeaturedArtForms();
   }, []);
+
+  const fetchFeaturedArtForms = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('art_forms')
+        .select('*')
+        .order('likes', { ascending: false })
+        .limit(3);
+
+      if (error) throw error;
+      setFeaturedArtForms(data || []);
+    } catch (error) {
+      console.error('Error fetching featured art forms:', error);
+    }
+  };
+
+  const handleLike = async (artFormId: string) => {
+    try {
+      const artForm = featuredArtForms.find(af => af.id === artFormId);
+      if (!artForm) return;
+
+      const newLikes = artForm.likes + 1;
+      
+      const { error } = await supabase
+        .from('art_forms')
+        .update({ likes: newLikes })
+        .eq('id', artFormId);
+
+      if (error) throw error;
+
+      setFeaturedArtForms(prev => 
+        prev.map(af => 
+          af.id === artFormId ? { ...af, likes: newLikes } : af
+        )
+      );
+    } catch (error) {
+      console.error('Error updating likes:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background texture-paper">
@@ -109,7 +122,7 @@ const Index = () => {
               >
                 <ArtCard 
                   artForm={artForm}
-                  onLike={(id) => console.log('Liked:', id)}
+                  onLike={handleLike}
                 />
               </div>
             ))}
